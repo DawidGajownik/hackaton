@@ -15,35 +15,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,49 +30,107 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val openComposable = intent.getBooleanExtra("openComposable", false)
-        fun scheduleDailyAlarm(context: Context, hour: Int = 18, minute: Int = 8) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(context, NotificationReceiver::class.java)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
 
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, hour)
-                set(Calendar.MINUTE, minute)
-                set(Calendar.SECOND, 0)
-            }
-            if (calendar.timeInMillis < System.currentTimeMillis()) {
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
-            }
-
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
-        }
+        // Schedule the daily alarm
         scheduleDailyAlarm(this)
 
-        setContent {
-            if (openComposable) {
-                // Tutaj wstaw swój Composable, który ma się otworzyć po kliknięciu powiadomienia
-                MySpecialComposable2()
-            } else {
-                SimpleDialerUI()
-            }
+        // --- NAVIGATION LOGIC ---
+        // Check the intent to determine the starting screen.
+        val fromDailyAlarm = intent.getBooleanExtra("openComposable", false)
+        val fromPushNotification = intent.getStringExtra("destination") == "admin"
+
+        val startDestination = when {
+            fromPushNotification -> "admin"  // From Firebase notification
+            fromDailyAlarm -> "special"     // From daily alarm notification
+            else -> "dialer"                // Normal app start
         }
 
-        // ustaw alarm przy starcie aplikacji
+        setContent {
+            val navController = rememberNavController()
+
+            // NavHost is the container for all your screens
+            NavHost(navController = navController, startDestination = startDestination) {
+                composable("dialer") {
+                    SimpleDialerUI(navController = navController)
+                }
+                composable("admin") {
+                    AdminScreen(navController = navController)
+                }
+                composable("special") {
+                    MySpecialComposable2(navController = navController)
+                }
+            }
+        }
+    }
+
+    private fun scheduleDailyAlarm(context: Context, hour: Int = 18, minute: Int = 8) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, NotificationReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+        }
+        if (calendar.timeInMillis < System.currentTimeMillis()) {
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis,
+            pendingIntent
+        )
     }
 }
+
+// --- ADMIN SCREEN with Back Button ---
+@Composable
+fun AdminScreen(navController: NavController) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D47A1)) // Dark Blue background
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Admin Panel",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(
+                onClick = { navController.popBackStack() },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0D47A1)
+                )
+            ) {
+                Text("Back to Dialer")
+            }
+        }
+    }
+}
+
+
 @Composable
 fun MySpecialComposable() {
     val context = LocalContext.current
@@ -102,7 +138,7 @@ fun MySpecialComposable() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF6200EE)) // fioletowe tło
+            .background(Color(0xFF6200EE))
             .padding(24.dp)
     ) {
         Column(
@@ -117,7 +153,6 @@ fun MySpecialComposable() {
                 modifier = Modifier.padding(bottom = 24.dp)
             )
 
-            // Siatka 3x3
             Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
                 for (row in 0 until 3) {
                     Row(
@@ -149,16 +184,17 @@ fun MySpecialComposable() {
         }
     }
 }
-@Composable
-fun MySpecialComposable2() {
-    val context = LocalContext.current
 
-    val emojis = listOf("😀", "🚀", "🎵", "🍕") // 4 losowe emotikony
+// --- SPECIAL COMPOSABLE 2 with Back Button ---
+@Composable
+fun MySpecialComposable2(navController: NavController) {
+    val context = LocalContext.current
+    val emojis = listOf("😀", "🚀", "🎵", "🍕")
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF6200EE)) // fioletowe tło
+            .background(Color(0xFF6200EE))
             .padding(24.dp)
     ) {
         Column(
@@ -200,13 +236,25 @@ fun MySpecialComposable2() {
                 }
             }
         }
+
+        Button(
+            onClick = { navController.popBackStack() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.White,
+                contentColor = Color(0xFF6200EE)
+            )
+        ) {
+            Text("Back to Dialer")
+        }
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SimpleDialerUI() {
+fun SimpleDialerUI(navController: NavController) {
     val context = LocalContext.current
     var number by remember { mutableStateOf("") }
 
@@ -227,7 +275,6 @@ fun SimpleDialerUI() {
         }
     }
 
-    // 🌸 Fioletowe tło
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -313,8 +360,18 @@ fun SimpleDialerUI() {
                 Text("Zakończ połączenie")
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = { navController.navigate("admin") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFFA000), // Amber color
+                    contentColor = Color.Black
+                )
+            ) {
+                Text("Admin Panel")
+            }
         }
     }
 }
-

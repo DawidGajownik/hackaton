@@ -29,7 +29,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Hackaton"
-        tools:targetApi="35">
+        tools:targetApi="35"
+        android:usesCleartextTraffic="true">
         <receiver android:name=".NotificationReceiver" />
 
         <service

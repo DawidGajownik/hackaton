@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.telecom.TelecomManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +36,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import java.util.Calendar
+import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,7 +62,10 @@ class MainActivity : ComponentActivity() {
             // NavHost is the container for all your screens
             NavHost(navController = navController, startDestination = startDestination) {
                 composable("dialer") {
-                    SimpleDialerUI(navController = navController)
+                    SimpleDialerUI(
+                        navController = navController,
+                        onLogEvent = { eventType, metadata -> logUserEvent(eventType, metadata) }
+                    )
                 }
                 composable("admin") {
                     AdminScreen(navController = navController)
@@ -71,6 +76,24 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    override fun onResume() {
+        super.onResume()
+        // When the app comes to the foreground, log the activity.
+        logUserEvent("APP_RESUMED")
+    }
+
+    // --- ADD THIS HELPER FUNCTION ---
+    private fun logUserEvent(eventType: String, metadata: Map<String, String>? = null) {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w("UserEventLogger", "Fetching FCM token failed", task.exception)
+                return@addOnCompleteListener
+            }
+            val token = task.result
+            ActivityLogger.logEvent(token, eventType, metadata)
+        }
+    }
+
 
     private fun scheduleDailyAlarm(context: Context, hour: Int = 18, minute: Int = 8) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -96,6 +119,8 @@ class MainActivity : ComponentActivity() {
         )
     }
 }
+
+
 
 // --- ADMIN SCREEN with Back Button ---
 @Composable
@@ -254,7 +279,11 @@ fun MySpecialComposable2(navController: NavController) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SimpleDialerUI(navController: NavController) {
+// --- MODIFIED: Added onLogEvent function parameter ---
+fun SimpleDialerUI(
+    navController: NavController,
+    onLogEvent: (eventType: String, metadata: Map<String, String>?) -> Unit
+) {
     val context = LocalContext.current
     var number by remember { mutableStateOf("") }
 
@@ -268,13 +297,18 @@ fun SimpleDialerUI(navController: NavController) {
 
     fun startCallTo(phoneNumber: String) {
         val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber"))
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CALL_PHONE
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
             context.startActivity(intent)
         } else {
             callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
         }
     }
 
+    // 🌸 Fioletowe tło
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -320,17 +354,34 @@ fun SimpleDialerUI(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(onClick = { startCallTo("500677381") }, modifier = Modifier.fillMaxWidth(), colors = buttonColors) {
+            // --- MODIFIED: Added onLogEvent call to this button's onClick ---
+            Button(
+                onClick = {
+                    startCallTo("500677381")
+                    // Log the event with specific metadata for this button
+                    onLogEvent("BUTTON_CLICK", mapOf("buttonId" to "call_piotr"))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = buttonColors
+            ) {
                 Text("Piotr")
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            Button(onClick = { startCallTo("732242825") }, modifier = Modifier.fillMaxWidth(), colors = buttonColors) {
+            Button(
+                onClick = { startCallTo("732242825") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = buttonColors
+            ) {
                 Text("Rafał")
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            Button(onClick = { startCallTo("531401474") }, modifier = Modifier.fillMaxWidth(), colors = buttonColors) {
+            Button(
+                onClick = { startCallTo("531401474") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = buttonColors
+            ) {
                 Text("Dawid")
             }
 
@@ -338,7 +389,11 @@ fun SimpleDialerUI(navController: NavController) {
 
             Button(onClick = {
                 val telecomManager = context.getSystemService(TelecomManager::class.java)
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ANSWER_PHONE_CALLS
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
                     telecomManager.acceptRingingCall()
                 } else {
                     callPermissionLauncher.launch(Manifest.permission.ANSWER_PHONE_CALLS)

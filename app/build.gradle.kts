@@ -69,4 +69,7 @@ dependencies {
 
     // Add navigation for switching between screens
     implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // ADD THIS LINE FOR THE HTTP CLIENT
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -8,64 +8,38 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
-import android.provider.Settings
 import android.telecom.TelecomManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavController
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
 import team.a.hackaton.navigation.AppNavigation
 import team.a.hackaton.screens.ThreeTilesScreen
@@ -103,17 +77,41 @@ class MainActivity : ComponentActivity() {
             )
         }
         scheduleDailyAlarm(this)
+        val fromDailyAlarm = intent.getBooleanExtra("openComposable", false)
+        val fromPushNotification = intent.getStringExtra("destination") == "admin"
 
+        val startDestination = when {
+            fromPushNotification -> "admin"  // From Firebase notification
+            fromDailyAlarm -> "special"     // From daily alarm notification
+            else -> "dialer"                // Normal app start
+        }
         setContent {
             if (openComposable) {
                 // Tutaj wstaw swój Composable, który ma się otworzyć po kliknięciu powiadomienia
                 MySpecialComposable2()
             } else {
-                FakeHomeScreen()
+                FakeHomeScreen(onLogEvent = { eventType, metadata -> logUserEvent(eventType, metadata) })
             }
         }
 
         // ustaw alarm przy starcie aplikacji
+    }
+    override fun onResume() {
+        super.onResume()
+        // When the app comes to the foreground, log the activity.
+        logUserEvent("APP_RESUMED")
+    }
+
+    // --- ADD THIS HELPER FUNCTION ---
+    private fun logUserEvent(eventType: String, metadata: Map<String, String>? = null) {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) {
+                Log.w("UserEventLogger", "Fetching FCM token failed", task.exception)
+                return@addOnCompleteListener
+            }
+            val token = task.result
+            ActivityLogger.logEvent(token, eventType, metadata)
+        }
     }
 }
 @Composable
@@ -171,7 +169,7 @@ fun MySpecialComposable() {
     }
 }
 @Composable
-fun FakeHomeScreen() {
+fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>?) -> Unit) {
     val context = LocalContext.current
     var showLoading by remember { mutableStateOf(false) }
     var openPlayCare by remember { mutableStateOf(false) }
@@ -306,7 +304,19 @@ fun FakeHomeScreen() {
                     }
                 }
             }
-
+            val buttonColors = ButtonDefaults.buttonColors(
+                containerColor = Color.White,
+                contentColor = Color(0xFF6200EE)
+            )
+            Button(
+                onClick = { // Log the event with specific metadata for this button
+                    onLogEvent("BUTTON_CLICK", mapOf("buttonId" to "call_piotr"))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = buttonColors
+            ) {
+                Text("Piotr")
+            }
             // Dół – pasek gestów
             Box(
                 modifier = Modifier
@@ -369,13 +379,12 @@ fun SafeAppNavigation() {
 @Composable
 fun MySpecialComposable2() {
     val context = LocalContext.current
-
-    val emojis = listOf("😀", "🚀", "🎵", "🍕") // 4 losowe emotikony
+    val emojis = listOf("😀", "🚀", "🎵", "🍕")
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF6200EE)) // fioletowe tło
+            .background(Color(0xFF6200EE))
             .padding(24.dp)
     ) {
         Column(
@@ -423,7 +432,11 @@ fun MySpecialComposable2() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SimpleDialerUI() {
+// --- MODIFIED: Added onLogEvent function parameter ---
+fun SimpleDialerUI(
+    navController: NavController,
+    onLogEvent: (eventType: String, metadata: Map<String, String>?) -> Unit
+) {
     val context = LocalContext.current
     var number by remember { mutableStateOf("") }
 

@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+
     id("com.google.gms.google-services")
 }
 
@@ -51,7 +52,9 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.navigation.compose.jvmstubs)
+    implementation(libs.junit)
+    implementation(libs.firebase.messaging.ktx)
+    implementation(libs.androidx.navigation.runtime.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -59,4 +62,17 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.okhttp)
+
+    implementation(platform(libs.firebase.bom.v3300))
+
+    implementation(libs.google.firebase.messaging)
+
+    implementation(libs.androidx.navigation.compose.v277)
+
+    implementation(libs.okhttp)
+
 }

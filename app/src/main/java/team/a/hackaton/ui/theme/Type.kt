@@ -1,4 +1,4 @@
-package team.a.hackaton.ui.theme
+package com.example.mainaccinterface.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

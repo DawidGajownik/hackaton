@@ -8,13 +8,21 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
+import android.provider.Settings
 import android.telecom.TelecomManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +33,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
@@ -40,25 +50,36 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
+import team.a.hackaton.navigation.AppNavigation
+import team.a.hackaton.screens.ThreeTilesScreen
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         val openComposable = intent.getBooleanExtra("openComposable", false)
-        fun scheduleDailyAlarm(context: Context, hour: Int = 18, minute: Int = 8) {
+        fun scheduleDailyAlarm(context: Context, hour: Int = 18, minute: Int = 43) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(context, NotificationReceiver::class.java)
             val pendingIntent = PendingIntent.getBroadcast(
@@ -88,7 +109,7 @@ class MainActivity : ComponentActivity() {
                 // Tutaj wstaw swój Composable, który ma się otworzyć po kliknięciu powiadomienia
                 MySpecialComposable2()
             } else {
-                SimpleDialerUI()
+                FakeHomeScreen()
             }
         }
 
@@ -149,6 +170,202 @@ fun MySpecialComposable() {
         }
     }
 }
+@Composable
+fun FakeHomeScreen() {
+    val context = LocalContext.current
+    var showLoading by remember { mutableStateOf(false) }
+    var openPlayCare by remember { mutableStateOf(false) }
+
+    when {
+        showLoading -> {
+            PlayCareLoadingScreen(
+                onFinished = {
+                    showLoading = false
+                    openPlayCare = true
+                }
+            )
+            return
+        }
+        openPlayCare -> {
+            ThreeTilesScreen(
+                onDailyAlarmClick = { /* akcja */ },
+                onBackToHome = {
+                    openPlayCare = false
+                }
+            )
+            return
+        }
+    }
+
+    val time by remember {
+        mutableStateOf(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()))
+    }
+    val date by remember {
+        mutableStateOf(SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()))
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF512DA8), Color(0xFF673AB7), Color(0xFF9575CD))
+                )
+            )
+            .padding(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Góra – godzina i data
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = time,
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Text(
+                    text = date.replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.bodyLarge.copy(color = Color.White.copy(alpha = 0.8f))
+                )
+            }
+
+            // Środek – ikony aplikacji (3x2)
+            val apps = listOf(
+                "📞" to "Telefon",
+                "💬" to "Wiadomości",
+                "📷" to "Aparat",
+                "⚙️" to "Ustawienia",
+                "CARE" to "Play Care",
+                "🎵" to "Muzyka"
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                for (row in 0 until 2) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(36.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (col in 0 until 3) {
+                            val index = row * 3 + col
+                            val (emojiOrText, label) = apps[index]
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable {
+                                    when (label) {
+                                        "Play Care" -> showLoading = true
+                                        else -> Toast.makeText(
+                                            context,
+                                            "Otwieram $label",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .background(
+                                            if (label == "Play Care")
+                                                Color(0xFF7E57C2)
+                                            else
+                                                Color.White.copy(alpha = 0.2f),
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (label == "Play Care") {
+                                        Text(
+                                            text = "CARE",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    } else {
+                                        Text(
+                                            text = emojiOrText,
+                                            fontSize = 32.sp
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(text = label, color = Color.White, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Dół – pasek gestów
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(100.dp)
+                        .height(6.dp)
+                        .background(Color.White.copy(alpha = 0.6f), shape = RoundedCornerShape(50))
+                )
+            }
+        }
+    }
+
+}
+
+@Composable
+fun PlayCareLoadingScreen(onFinished: () -> Unit) {
+    var scale by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        animate(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing)
+        ) { value, _ ->
+            scale = value
+        }
+        delay(2000)
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF7E57C2)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "CARE",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = (80 * scale).sp
+        )
+    }
+
+}
+
+
+
+@Composable
+fun SafeAppNavigation() {
+    // Po prostu wywołujemy AppNavigation() w runtime
+    AppNavigation()
+}
+
 @Composable
 fun MySpecialComposable2() {
     val context = LocalContext.current

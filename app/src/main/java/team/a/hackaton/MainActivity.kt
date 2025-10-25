@@ -8,16 +8,20 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
+import android.provider.Settings
 import android.telecom.TelecomManager
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,9 +34,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -42,6 +49,7 @@ import androidx.navigation.NavController
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
 import team.a.hackaton.navigation.AppNavigation
+import team.a.hackaton.screens.DailyAlarmScreen
 import team.a.hackaton.screens.ThreeTilesScreen
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -53,7 +61,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val openComposable = intent.getBooleanExtra("openComposable", false)
-        fun scheduleDailyAlarm(context: Context, hour: Int = 18, minute: Int = 43) {
+
+        fun scheduleDailyAlarm(context: Context, hour: Int = 9, minute: Int = 1) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(context, NotificationReceiver::class.java)
             val pendingIntent = PendingIntent.getBroadcast(
@@ -69,33 +78,38 @@ class MainActivity : ComponentActivity() {
             if (calendar.timeInMillis < System.currentTimeMillis()) {
                 calendar.add(Calendar.DAY_OF_YEAR, 1)
             }
-
+            val triggerTime = System.currentTimeMillis() + 5_000
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
+                triggerTime,
                 pendingIntent
             )
         }
-        scheduleDailyAlarm(this)
-        val fromDailyAlarm = intent.getBooleanExtra("openComposable", false)
-        val fromPushNotification = intent.getStringExtra("destination") == "admin"
 
-        val startDestination = when {
-            fromPushNotification -> "admin"  // From Firebase notification
-            fromDailyAlarm -> "special"     // From daily alarm notification
-            else -> "dialer"                // Normal app start
-        }
+        scheduleDailyAlarm(this)
+
         setContent {
-            if (openComposable) {
-                // Tutaj wstaw swój Composable, który ma się otworzyć po kliknięciu powiadomienia
-                MySpecialComposable2()
+            // 🔹 prosty stan określający, który ekran ma być pokazany
+            var showYesScreen by remember { mutableStateOf(openComposable) }
+
+            if (showYesScreen) {
+                SingleYesButtonScreen(
+                    onYesClick = { eventType, metadata ->
+                        logUserEvent(eventType, metadata)
+                    },
+                    onBackToHome = {
+                        // 🔹 po kliknięciu lub Back wracamy do ekranu głównego
+                        showYesScreen = false
+                    }
+                )
             } else {
-                FakeHomeScreen(onLogEvent = { eventType, metadata -> logUserEvent(eventType, metadata) })
+                FakeHomeScreen(
+                    onLogEvent = { eventType, metadata -> logUserEvent(eventType, metadata) }
+                )
             }
         }
-
-        // ustaw alarm przy starcie aplikacji
     }
+
     override fun onResume() {
         super.onResume()
         // When the app comes to the foreground, log the activity.
@@ -173,8 +187,23 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
     val context = LocalContext.current
     var showLoading by remember { mutableStateOf(false) }
     var openPlayCare by remember { mutableStateOf(false) }
+    var showYesButtonScreen by remember { mutableStateOf(false) }
+    var dailyAlarmScreen by remember { mutableStateOf(false) }
+
 
     when {
+        showYesButtonScreen -> {
+            SingleYesButtonScreen(
+                onYesClick = { event, metadata ->
+                    onLogEvent(event, metadata)
+                    showYesButtonScreen = false // or maybe trigger another screen
+                },
+                onBackToHome = {
+                    showYesButtonScreen = false // this goes back to FakeHomeScreen
+                }
+            )
+            return
+        }
         showLoading -> {
             PlayCareLoadingScreen(
                 onFinished = {
@@ -184,12 +213,17 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
             )
             return
         }
+
+        dailyAlarmScreen -> {
+            DailyAlarmScreen (
+               onBackClick = { dailyAlarmScreen = false },
+            )
+            return
+        }
         openPlayCare -> {
             ThreeTilesScreen(
-                onDailyAlarmClick = { /* akcja */ },
-                onBackToHome = {
-                    openPlayCare = false
-                }
+                onDailyAlarmClick = { dailyAlarmScreen = true },
+                onBackToHome = { openPlayCare = false }
             )
             return
         }
@@ -262,12 +296,32 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.clickable {
                                     when (label) {
-                                        "Play Care" -> showLoading = true
-                                        else -> Toast.makeText(
-                                            context,
-                                            "Otwieram $label",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        "Telefon" -> {
+                                            val intent = Intent(Intent.ACTION_DIAL)
+                                            context.startActivity(intent)
+                                        }
+                                        "Wiadomości" -> {
+                                            val intent = Intent(Intent.ACTION_MAIN).apply {
+                                                addCategory(Intent.CATEGORY_APP_MESSAGING)
+                                            }
+                                            context.startActivity(intent)
+                                        }
+                                        "Aparat" -> {
+                                            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                                            context.startActivity(intent)
+                                        }
+                                        "Ustawienia" -> {
+                                            val intent = Intent(Settings.ACTION_SETTINGS)
+                                            context.startActivity(intent)
+                                        }
+                                        "Play Care" -> {
+                                            showLoading = true
+                                        }
+                                        "Muzyka" -> {
+                                            val intent = Intent(MediaStore.INTENT_ACTION_MUSIC_PLAYER)
+                                            context.startActivity(intent)
+                                        }
+                                        else -> Toast.makeText(context, "Nieznana aplikacja", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             ) {
@@ -284,16 +338,18 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (label == "Play Care") {
-                                        Text(
-                                            text = "CARE",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 18.sp
+                                        Image(
+                                            painter = painterResource(id = R.drawable.care),
+                                            contentDescription = "Care",
+                                            modifier = Modifier
+                                                .fillMaxSize() // ustaw rozmiar obrazka
+                                                .clip(CircleShape), // nadaje kształt okręgu
+                                            contentScale = ContentScale.FillBounds // przycina obraz, żeby dobrze wypełniał kształt
                                         )
                                     } else {
                                         Text(
                                             text = emojiOrText,
-                                            fontSize = 32.sp
+                                            fontSize = 45.sp
                                         )
                                     }
                                 }
@@ -304,19 +360,20 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
                     }
                 }
             }
+
             val buttonColors = ButtonDefaults.buttonColors(
                 containerColor = Color.White,
                 contentColor = Color(0xFF6200EE)
             )
-            Button(
-                onClick = { // Log the event with specific metadata for this button
-                    onLogEvent("BUTTON_CLICK", mapOf("buttonId" to "call_piotr"))
-                },
+
+            /*Button(
+                onClick = { onLogEvent("BUTTON_CLICK", mapOf("buttonId" to "call_piotr")) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = buttonColors
             ) {
                 Text("Piotr")
-            }
+            }*/
+
             // Dół – pasek gestów
             Box(
                 modifier = Modifier
@@ -348,33 +405,26 @@ fun PlayCareLoadingScreen(onFinished: () -> Unit) {
         ) { value, _ ->
             scale = value
         }
-        delay(2000)
+        delay(1000) // Czas animacji + trochę pauzy
         onFinished()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF7E57C2)),
+            .background(Color(0xFF583178)), // tło dopasowane do obrazu
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "CARE",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = (80 * scale).sp
+        Image(
+            painter = painterResource(id = R.drawable.care), // zamień na nazwę Twojego pliku w drawable
+            contentDescription = "Play Care Logo",
+            modifier = Modifier
+                .size((200 * scale).dp) // powiększający się obraz
         )
     }
-
 }
 
 
-
-@Composable
-fun SafeAppNavigation() {
-    // Po prostu wywołujemy AppNavigation() w runtime
-    AppNavigation()
-}
 
 @Composable
 fun MySpecialComposable2() {
@@ -425,6 +475,43 @@ fun MySpecialComposable2() {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SingleYesButtonScreen(
+    onYesClick: (eventType: String, metadata: Map<String, String>?) -> Unit,
+    onBackToHome: () -> Unit
+) {
+    // Gdy użytkownik naciśnie fizyczny przycisk "wstecz"
+    BackHandler(onBack = { onBackToHome() })
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF673AB7)), // fioletowe tło
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(300.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF4CAF50)) // zielony przycisk
+                .clickable {
+                    // Wywołaj logowanie zdarzenia
+                    onYesClick("BUTTON_CLICK", mapOf("buttonId" to "YES"))
+                    // A następnie wróć do ekranu głównego
+                    onBackToHome()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "✔",
+                color = Color.White,
+                fontSize = 156.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

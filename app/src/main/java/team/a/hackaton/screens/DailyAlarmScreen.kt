@@ -1,5 +1,6 @@
 package team.a.hackaton.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -24,6 +25,7 @@ fun DailyAlarmScreen(
     var alarmTime by remember { mutableStateOf(LocalTime.of(8, 0)) } // Default time: 8:00 AM
     var isAlarmEnabled by remember { mutableStateOf(true) }
     var showTimePicker by remember { mutableStateOf(false) }
+    BackHandler(onBack = { onBackClick() })
 
     // Format time for display (e.g., "08:00 AM")
     val formattedTime by remember(alarmTime) {

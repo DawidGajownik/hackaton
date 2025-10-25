@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.junit)
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.androidx.navigation.runtime.android)
+    implementation(libs.androidx.games.activity)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

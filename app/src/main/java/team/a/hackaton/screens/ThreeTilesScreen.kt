@@ -31,7 +31,7 @@ fun ThreeTilesScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFF512DA8), Color(0xFF673AB7), Color(0xFF9575CD))
+                    colors = listOf(Color(0xFF583178), Color(0xFF583178), Color(0xFF9575CD))
                 )
             )
             .padding(16.dp)

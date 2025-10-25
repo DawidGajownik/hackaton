@@ -104,12 +104,22 @@ class MainActivity : ComponentActivity() {
 
     // --- ADD THIS HELPER FUNCTION ---
     private fun logUserEvent(eventType: String, metadata: Map<String, String>? = null) {
+        // Use a unique, easy-to-find log tag
+        val logTag = "UserEventLogger"
+
+        Log.d(logTag, "Attempting to fetch FCM token for event: $eventType")
+
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (!task.isSuccessful) {
-                Log.w("UserEventLogger", "Fetching FCM token failed", task.exception)
+                Log.e(logTag, ">>>> FETCHING FCM TOKEN FAILED", task.exception)
                 return@addOnCompleteListener
             }
+
+            // Get new FCM registration token
             val token = task.result
+            Log.d(logTag, ">>>> SUCCESSFULLY FETCHED TOKEN: $token")
+
+            // Now, send it to our logger
             ActivityLogger.logEvent(token, eventType, metadata)
         }
     }

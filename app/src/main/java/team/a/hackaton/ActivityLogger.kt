@@ -13,6 +13,7 @@ object ActivityLogger {
     // 10.0.2.2 is a special alias for the host machine's localhost when using the Android Emulator.
     // If using a physical device, find your computer's IP (e.g., 192.168.1.10) and use that.
     private const val SERVER_URL = "http://10.0.2.2:5000/log-event"
+    private const val API_KEY = "abcde12345"
 
     private val client = OkHttpClient()
 
@@ -40,6 +41,7 @@ object ActivityLogger {
                 val request = Request.Builder()
                     .url(SERVER_URL)
                     .post(body)
+                    .addHeader("X-API-Key", API_KEY)
                     .build()
 
                 client.newCall(request).execute().use { response ->

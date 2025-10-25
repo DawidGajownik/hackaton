@@ -16,8 +16,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     // This function is called when a new token is generated.
     // You would use this token to send a notification to this specific device.
     override fun onNewToken(token: String) {
-        Log.d("FCM_TOKEN", "Refreshed token: $token")
-        // You can send this token to your server if you have one
+        // Use a unique, easy-to-find log tag
+        Log.d("FCM_TOKEN_REFRESH", ">>>> NEW TOKEN GENERATED: $token")
+
+        // IMPORTANT: We should immediately report this new token to our server.
+        // This ensures that even if the app is in the background, the server
+        // gets the most up-to-date token.
+        ActivityLogger.logEvent(token, "TOKEN_REFRESH")
     }
 
     // This is called when a message is received while the app is in the foreground.

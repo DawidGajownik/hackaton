@@ -61,7 +61,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val openComposable = intent.getBooleanExtra("openComposable", false)
+        fun scheduleOneTimeAlarm(context: Context) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, NotificationReceiver::class.java)
 
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Alarm za 5 sekund od teraz
+            val triggerTime = System.currentTimeMillis() + 5_000
+
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerTime,
+                pendingIntent
+            )
+        }
         fun scheduleDailyAlarm(context: Context, hour: Int = 9, minute: Int = 1) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(context, NotificationReceiver::class.java)
@@ -86,15 +105,17 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        scheduleDailyAlarm(this)
+        if (!openComposable) {
+            scheduleDailyAlarm(this)
+        }
 
         setContent {
             // 🔹 prosty stan określający, który ekran ma być pokazany
             var showYesScreen by remember { mutableStateOf(openComposable) }
 
             if (showYesScreen) {
-                SingleYesButtonScreen(
-                    onYesClick = { eventType, metadata ->
+                MultipleEmojiButtonsScreen(
+                    onEmojiClick = { eventType, metadata ->
                         logUserEvent(eventType, metadata)
                     },
                     onBackToHome = {
@@ -189,9 +210,18 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
     var openPlayCare by remember { mutableStateOf(false) }
     var showYesButtonScreen by remember { mutableStateOf(false) }
     var dailyAlarmScreen by remember { mutableStateOf(false) }
+    var dzieci by remember { mutableStateOf(false) }
 
 
     when {
+        dzieci -> {
+            MultipleEmojiButtonsScreen(
+                onEmojiClick = { event, metadata ->
+                    onLogEvent(event, metadata)
+                    dzieci = false // or maybe trigger another screen
+                }
+            ) { }
+        }
         showYesButtonScreen -> {
             SingleYesButtonScreen(
                 onYesClick = { event, metadata ->
@@ -223,7 +253,7 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
         openPlayCare -> {
             ThreeTilesScreen(
                 onDailyAlarmClick = { dailyAlarmScreen = true },
-                onBackToHome = { openPlayCare = false }
+                onBackToHome = { openPlayCare = false },
             )
             return
         }
@@ -275,7 +305,7 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
                 "📷" to "Aparat",
                 "⚙️" to "Ustawienia",
                 "CARE" to "Play Care",
-                "🎵" to "Muzyka"
+                "🧠" to "Senior Test" // 🧠 – ikona testu
             )
 
             Column(
@@ -317,12 +347,13 @@ fun FakeHomeScreen(onLogEvent: (eventType: String, metadata: Map<String, String>
                                         "Play Care" -> {
                                             showLoading = true
                                         }
-                                        "Muzyka" -> {
-                                            val intent = Intent(MediaStore.INTENT_ACTION_MUSIC_PLAYER)
-                                            context.startActivity(intent)
+                                        "Senior Test" -> {
+                                            // 🔹 Uruchamia ekran z emoji
+                                            showYesButtonScreen = true
                                         }
                                         else -> Toast.makeText(context, "Nieznana aplikacja", Toast.LENGTH_SHORT).show()
                                     }
+
                                 }
                             ) {
                                 Box(
@@ -512,6 +543,55 @@ fun SingleYesButtonScreen(
                 fontSize = 156.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+@Composable
+fun MultipleEmojiButtonsScreen(
+    onEmojiClick: (eventType: String, metadata: Map<String, String>?) -> Unit,
+    onBackToHome: () -> Unit
+) {
+    // Obsługa przycisku "wstecz"
+    BackHandler(onBack = { onBackToHome() })
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF673AB7)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            val emojis = listOf("😊", "😎", "🤔", ":)")
+
+            emojis.chunked(2).forEach { rowEmojis ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    rowEmojis.forEach { emoji ->
+                        Box(
+                            modifier = Modifier
+                                .size(140.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF4CAF50))
+                                .clickable {
+                                    onEmojiClick("EMOJI_CLICK", mapOf("emoji" to emoji))
+                                    onBackToHome()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = emoji,
+                                fontSize = 64.sp
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
